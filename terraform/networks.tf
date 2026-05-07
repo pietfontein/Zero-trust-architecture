@@ -33,8 +33,8 @@ resource "docker_network" "public_net" {
   }
 
   options = {
-    "com.docker.network.bridge.name" = "zt-public"
-    "com.docker.network.bridge.enable_icc" = "true"
+    "com.docker.network.bridge.name"                 = "zt-public"
+    "com.docker.network.bridge.enable_icc"           = "true"
     "com.docker.network.bridge.enable_ip_masquerade" = "true"
   }
 
@@ -66,14 +66,14 @@ resource "docker_network" "private_net" {
   }
 
   labels {
-  label = "project"
-  value = "zero-trust"
-}
+    label = "project"
+    value = "zero-trust"
+  }
 
   labels {
-  label = "tier"
-  value = "private" 
-}
+    label = "tier"
+    value = "private"
+  }
 
 }
 
@@ -100,13 +100,13 @@ resource "docker_network" "data_net" {
   }
 
   labels {
-  label = "project"
-  value = "zero-trust"
-}
+    label = "project"
+    value = "zero-trust"
+  }
 
-labels {
-  label = "tier"
-  value = "data" 
+  labels {
+    label = "tier"
+    value = "data"
 
-}
+  }
 }

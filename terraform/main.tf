@@ -80,7 +80,7 @@ data "docker_registry_image" "vault" {
 # ==============================================================================
 resource "docker_volume" "postgres_data" {
   name = "zt_postgres_data"
-  
+
   # WHY driver "local"?
   # Local volumes are stored on the Docker host's filesystem.
   # For production: use a networked volume driver (NFS, Ceph, or cloud block storage)
@@ -130,18 +130,18 @@ resource "docker_container" "nginx" {
 
   # Exposed ports (public tier only)
   ports {
-  external = 8080
-  internal = 80
-  ip       = "0.0.0.0"
-  protocol = "tcp"
-}
+    external = 8080
+    internal = 80
+    ip       = "0.0.0.0"
+    protocol = "tcp"
+  }
 
-ports {
-  external = 8443
-  internal = 443
-  ip       = "0.0.0.0"
-  protocol = "tcp"
-}
+  ports {
+    external = 8443
+    internal = 443
+    ip       = "0.0.0.0"
+    protocol = "tcp"
+  }
 
 
   # Attach to both public and private networks
@@ -156,15 +156,15 @@ ports {
   # WHY :ro? The container reads config but cannot modify it.
   # If Nginx is compromised, the attacker can't persist config changes.
   mounts {
-    target = "/etc/nginx/nginx.conf"
-    source = "C:/Users/Sylvia Zwane/zero-trust-architecture/nginx/nginx.conf"
-    type   = "bind"
+    target    = "/etc/nginx/nginx.conf"
+    source    = "C:/Users/Sylvia Zwane/zero-trust-architecture/nginx/nginx.conf"
+    type      = "bind"
     read_only = true
   }
   mounts {
-    target = "/etc/nginx/conf.d/security-headers.conf"
-    source = "C:/Users/Sylvia Zwane/zero-trust-architecture/nginx/security-headers.conf"
-    type   = "bind"
+    target    = "/etc/nginx/conf.d/security-headers.conf"
+    source    = "C:/Users/Sylvia Zwane/zero-trust-architecture/nginx/security-headers.conf"
+    type      = "bind"
     read_only = true
   }
 
@@ -208,7 +208,7 @@ locals {
   # 3. filemd5("../app/Dockerfile") fails on Windows because Terraform
   #    evaluates the path before Docker resolves it, and Windows path
   #    separators trip up the function. abspath() + fileset() avoids this.
-  app_dir      = abspath("${path.module}/../app")
+  app_dir = abspath("${path.module}/../app")
   app_src_hash = sha1(join("", [
     for f in sort(fileset(local.app_dir, "**")) :
     filesha1("${local.app_dir}/${f}")
@@ -294,7 +294,7 @@ resource "docker_container" "app_az2" {
   ]
 
   read_only = true
-  tmpfs = { "/tmp" = "size=100m,mode=1777" }
+  tmpfs     = { "/tmp" = "size=100m,mode=1777" }
 
   healthcheck {
     test     = ["CMD", "curl", "-f", "http://localhost:5000/health"]
@@ -303,20 +303,20 @@ resource "docker_container" "app_az2" {
     retries  = 3
   }
 
- labels {
-  label = "project"
-  value = "zero-trust"
-}
+  labels {
+    label = "project"
+    value = "zero-trust"
+  }
 
-labels {
-  label = "tier"
-  value = "private"
-}
+  labels {
+    label = "tier"
+    value = "private"
+  }
 
-labels {
-  label = "az"
-  value = "2"
-}
+  labels {
+    label = "az"
+    value = "2"
+  }
 
 }
 
@@ -360,14 +360,14 @@ resource "docker_container" "postgres" {
   }
 
   labels {
-  label = "project"
-  value = "zero-trust"
-}
+    label = "project"
+    value = "zero-trust"
+  }
 
-labels {
-  label = "tier"
-  value = "data"
-}
+  labels {
+    label = "tier"
+    value = "data"
+  }
 
 }
 
@@ -377,7 +377,7 @@ labels {
 resource "docker_container" "vault" {
   name    = "zt-vault"
   image   = data.docker_registry_image.vault.name
-  user    ="root"
+  user    = "root"
   restart = "unless-stopped"
 
   networks_advanced {
