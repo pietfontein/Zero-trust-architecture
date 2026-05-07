@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   secret-detection:
     name: "Secret Detection (GitLeaks)"
@@ -38,45 +42,29 @@ jobs:
   container-scan:
     name: "Container Scan (Trivy)"
     runs-on: ubuntu-latest
-    # WHY these permissions?
-    # security-events: write — required to upload SARIF to GitHub Security tab
-    # Without it: "Resource not accessible by integration" error
-    permissions:
-      security-events: write
-      contents: read
     steps:
       - uses: actions/checkout@v4
-
       - name: Build app image
         run: docker build -t zt-app:ci ./app
-
       - name: Scan app image with Trivy
         uses: aquasecurity/trivy-action@0.28.0
         with:
-          image-ref: 'zt-app:ci'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
-          # WHY exit-code '0' not '1'?
-          # exit-code '1' fails the pipeline when CVEs are found.
-          # During initial setup, base images often have known CVEs that
-          # are not yet patched upstream. Set to '0' so the pipeline reports
-          # findings without blocking — review the Security tab and fix
-          # CRITICAL CVEs before setting back to '1' in production.
+          image-ref: zt-app:ci
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
           exit-code: '0'
-
       - name: Upload Trivy results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
-          sarif_file: 'trivy-results.sarif'
-
+          sarif_file: trivy-results.sarif
       - name: Scan nginx base image
         uses: aquasecurity/trivy-action@0.28.0
         with:
-          image-ref: 'owasp/modsecurity-crs:nginx-alpine'
-          format: 'table'
-          severity: 'CRITICAL'
+          image-ref: owasp/modsecurity-crs:nginx-alpine
+          format: table
+          severity: CRITICAL
           exit-code: '0'
 
   terraform-security:
@@ -84,20 +72,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
-
       - name: Terraform Format Check
         working-directory: terraform
         run: terraform fmt -check -recursive
-
       - name: Terraform Validate
         working-directory: terraform
         run: |
           terraform init -backend=false
           terraform validate
-
       - name: Run Checkov
         uses: bridgecrewio/checkov-action@master
         with:
