@@ -42,25 +42,34 @@ jobs:
   container-scan:
     name: "Container Scan (Trivy)"
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write  # Required for uploading SARIF
+      contents: read
     steps:
       - uses: actions/checkout@v4
+
       - name: Build app image
         run: docker build -t zt-app:ci ./app
+
       - name: Scan app image with Trivy
-        uses: aquasecurity/trivy-action@v0.20.0
+        # Use a full SHA to prevent supply chain attacks
+        # This SHA corresponds to the verified safe v0.35.0 release
+        uses: aquasecurity/trivy-action@18f2510ee396bbf400d4505b66069979c104437e 
         with:
           image-ref: zt-app:ci
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
-          exit-code: '0'
+          exit-code: '0' # Set to '1' if you want the pipeline to fail on findings
+
       - name: Upload Trivy results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: trivy-results.sarif
+
       - name: Scan nginx base image
-        uses: aquasecurity/trivy-action@v0.20.0
+        uses: aquasecurity/trivy-action@18f2510ee396bbf400d4505b66069979c104437e
         with:
           image-ref: owasp/modsecurity-crs:nginx-alpine
           format: table
