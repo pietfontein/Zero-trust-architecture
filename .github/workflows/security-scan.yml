@@ -52,7 +52,7 @@ jobs:
         run: docker build -t zt-app:ci ./app
 
       - name: Scan app image with Trivy
-        uses: aquasecurity/trivy-action@18f2510ee396bbf400d4505b66069979c104437e
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
          image-ref: zt-app:ci
          format: sarif
@@ -68,7 +68,7 @@ jobs:
           sarif_file: trivy-results.sarif
 
       - name: Scan nginx base image
-        uses: aquasecurity/trivy-action@18f2510ee396bbf400d4505b66069979c104437e
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: owasp/modsecurity-crs:nginx-alpine
           format: table
