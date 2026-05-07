@@ -1,0 +1,7 @@
+flask
+flask-limiter
+psycopg2-binary
+redis
+bcrypt
+hvac
+werkzeug

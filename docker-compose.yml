@@ -1,0 +1,321 @@
+# ==============================================================================
+# Zero-Trust Multi-Tier Web Architecture — Docker Compose
+# ==============================================================================
+#
+# WHY DOCKER COMPOSE (not Kubernetes)?
+#   Kubernetes is the right tool for large-scale clusters. Docker Compose is
+#   the right tool for a reproducible, learnable architecture on a single host.
+#   The network isolation model and security patterns are identical.
+#   Kubernetes translation guide is in docs/k8s-migration.md.
+#
+# NETWORK DESIGN (mirrors AWS VPC):
+#   public_net   → Only Nginx lives here, exposed to host
+#   private_net  → App servers; reachable from public_net, not from outside
+#   data_net     → DB, cache, vault; reachable from private_net only
+#
+#   This means:
+#   - A compromised public container CANNOT reach the database
+#   - The database container has NO route to the internet
+#   - Vault secrets never traverse a public network
+#
+# ==============================================================================
+
+name: zero-trust_data_net
+
+networks:
+  # PUBLIC TIER: Edge-facing. Nginx is the only service here.
+  public_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.10.0/24
+    driver_opts:
+      com.docker.network.bridge.name: zt-public
+
+  # PRIVATE TIER: App servers. No direct internet access.
+  private_net:
+    driver: bridge
+    internal: false   # App servers need outbound for package updates in dev
+    ipam:
+      config:
+        - subnet: 172.25.20.0/24
+    driver_opts:
+      com.docker.network.bridge.name: zt-private
+
+  # DATA TIER: Databases, cache, secrets. Completely isolated.
+  data_net:
+    driver: bridge
+    internal: true    # ← CRITICAL: true = no route to host network = no internet
+    ipam:
+      config:
+        - subnet: 172.25.30.0/24
+    driver_opts:
+      com.docker.network.bridge.name: zt-data-br
+
+# ==============================================================================
+# VOLUMES: Named volumes survive container restarts
+# ==============================================================================
+volumes:
+  postgres_primary_data:
+  postgres_replica_data:
+  redis_data:
+  vault_data:
+  minio_data:
+  nginx_logs:
+
+# ==============================================================================
+# SERVICES
+# ==============================================================================
+services:
+
+  # ============================================================================
+  # PUBLIC TIER — Nginx + ModSecurity WAF
+  # ============================================================================
+  nginx:
+    image: owasp/modsecurity-crs:nginx-alpine  # Pre-built Nginx + ModSecurity + OWASP CRS
+    container_name: zt-nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"     # HTTP (redirects to HTTPS in production)
+      - "8443:443"   # HTTPS
+    networks:
+      - public_net   # Faces the internet
+      - private_net  # Routes to app servers
+    volumes:
+      - ../nginx/nginx.conf:/etc/nginx/templates/nginx.conf.template:ro
+      - ../nginx/proxy-params.conf:/etc/nginx/conf.d/proxy-params.conf:ro
+      - ../nginx/security-headers.conf:/etc/nginx/conf.d/security-headers.conf:ro
+      - nginx_logs:/var/log/nginx
+      - ./nginx-run:/run
+    environment:
+      - PARANOIA=2        # OWASP CRS paranoia level (1=low, 4=high). 2 is production-safe.
+      - ANOMALY_INBOUND=5 # Score threshold — block if request score ≥ 5
+      - ANOMALY_OUTBOUND=4
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # WHY non-root?
+    # If nginx is compromised, the attacker gets nobody permissions, not root.
+    # They cannot write to /etc, install tools, or read /root
+    # nginx user
+
+  # ============================================================================
+  # PRIVATE TIER — App Server AZ1 (Primary)
+  # ============================================================================
+  app_az1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: zt-app-az1
+    restart: unless-stopped
+    networks:
+      - private_net  # Receives traffic from nginx
+      - data_net     # Connects to database and vault
+    # WHY NO PORTS HERE?
+    # App servers are NOT exposed to the host. The only way to reach them
+    # is through Nginx on the private_net. This is the "private subnet" pattern.
+    environment:
+      - APP_ENV=production
+      - VAULT_ADDR=http://vault:8200
+      # Vault token is read from file, not env var (env vars appear in `docker inspect`)
+      - VAULT_ROLE_ID_FILE=/run/secrets/vault_role_id
+      - VAULT_SECRET_ID_FILE=/run/secrets/vault_secret_id
+      - REDIS_HOST=redis
+      - POSTGRES_HOST=postgres_primary
+    secrets:
+      - vault_role_id
+      - vault_secret_id
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    user: "1001:1001"  # app user (defined in Dockerfile)
+    read_only: true    # Container filesystem is read-only
+    tmpfs:
+      - /tmp           # Apps need /tmp; mount it as tmpfs (memory, not disk)
+
+  # ============================================================================
+  # PRIVATE TIER — App Server AZ2 (Replica for HA)
+  # ============================================================================
+  app_az2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: zt-app-az2
+    restart: unless-stopped
+    networks:
+      - private_net
+      - data_net
+    environment:
+      - APP_ENV=production
+      - VAULT_ADDR=http://vault:8200
+      - VAULT_ROLE_ID_FILE=/run/secrets/vault_role_id
+      - VAULT_SECRET_ID_FILE=/run/secrets/vault_secret_id
+      - REDIS_HOST=redis
+      - POSTGRES_HOST=postgres_primary
+    secrets:
+      - vault_role_id
+      - vault_secret_id
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    user: "1001:1001"
+    read_only: true
+    tmpfs:
+      - /tmp
+
+  # ============================================================================
+  # DATA TIER — PostgreSQL Primary
+  # ============================================================================
+  postgres_primary:
+    image: postgres:16-alpine  # Alpine = smaller attack surface
+    container_name: zt-postgres-primary
+    restart: unless-stopped
+    networks:
+      - data_net  # ONLY on data_net — completely unreachable from public tier
+    volumes:
+      - postgres_primary_data:/var/lib/postgresql/data
+      - ../scripts/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    environment:
+      # WHY NOT HARDCODED PASSWORD?
+      # The password is set by Vault during init. These env vars bootstrap the
+      # initial container only — Vault rotation takes over after first run.
+      - POSTGRES_DB=appdb
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    # WHY THESE POSTGRES SECURITY OPTIONS?
+    command: >
+      postgres
+      -c log_connections=on
+      -c log_disconnections=on
+      -c log_duration=on
+      -c log_statement=all
+      -c max_connections=100
+      -c shared_buffers=256MB
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d appdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================================
+  # DATA TIER — Redis (session cache, rate-limit state)
+  # ============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: zt-redis
+    restart: unless-stopped
+    networks:
+      - data_net  # Only reachable from private_net app servers
+    volumes:
+      - redis_data:/data
+      - ../scripts/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    # WHY THESE REDIS OPTIONS?
+    # requirepass: authentication required (even on internal network)
+    # maxmemory: prevent OOM from cache abuse
+    # appendonly: persistence so sessions survive restarts
+    command: redis-server /usr/local/etc/redis/redis.conf
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================================
+  # DATA TIER — HashiCorp Vault (Secret Management)
+  # ============================================================================
+  vault:
+    image: hashicorp/vault:1.15
+    container_name: zt-vault
+    restart: unless-stopped
+    ports:
+     - "8200:8200"
+    networks:
+      - data_net  # Only app servers on data_net can reach Vault
+    volumes:
+      - ../vault/data:/vault/data
+      - ../vault/config.hcl:/vault/config/config.hcl:ro
+      - ../vault/policies:/vault/policies:ro
+    environment:
+      - VAULT_ADDR=http://vault:8200
+      - VAULT_ROLE_ID='/run/secrets/vault_role_id'
+      - VAULT_SECRET_ID='/run/secrets/vault_secret_id'
+      - VAULT_API_ADDR=http://vault:8200
+    cap_add:
+      - IPC_LOCK  # Vault requires this to prevent secrets from being swapped to disk
+    command: vault server -config=/vault/config/config.hcl
+    healthcheck:
+      test: ["CMD", "vault", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================================
+  # DATA TIER — MinIO (S3-compatible object storage)
+  # ============================================================================
+  minio:
+    image: minio/minio:latest
+    container_name: zt-minio
+    restart: unless-stopped
+    networks:
+      - data_net
+    volumes:
+      - minio_data:/data
+    environment:
+      - MINIO_ROOT_USER_FILE=/run/secrets/minio_user
+      - MINIO_ROOT_PASSWORD_FILE=/run/secrets/minio_password
+    secrets:
+      - minio_user
+      - minio_password
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================================================
+  # OBSERVABILITY — Prometheus metrics scraper
+  # ============================================================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: zt-prometheus
+    restart: unless-stopped
+    networks:
+      - private_net
+      - data_net
+    volumes:
+      - ./scripts/prometheus.yml:/etc/prometheus/prometheus.yml
+    # WHY NOT EXPOSE PROMETHEUS?
+    # Prometheus has no auth by default. Only expose via Nginx with basic auth.
+    # Access it via: docker exec -it zt-prometheus sh
+
+# ==============================================================================
+# DOCKER SECRETS
+# These are read from files (not env vars) — they don't appear in `docker inspect`
+# In production, these files are written by Vault, not committed to git
+# ==============================================================================
+secrets:
+  # WHY separate role_id and secret_id files?
+  # Docker secrets mount each file at /run/secrets/<name>.
+  # role_id (semi-public) and secret_id (secret) are kept separate so
+  # secret_id can be rotated (file replaced + containers restarted) without
+  # touching role_id. This is the key operational advantage of AppRole.
+  vault_role_id:
+    file: ./secrets/vault_role_id.txt
+  vault_secret_id:
+    file: ./secrets/vault_secret_id.txt
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+  minio_user:
+    file: ./secrets/minio_user.txt
+  minio_password:
+    file: ./secrets/minio_password.txt
+

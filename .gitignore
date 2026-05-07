@@ -1,0 +1,73 @@
+# ==============================================================================
+# .gitignore — Zero-Trust Architecture
+# ==============================================================================
+
+# ─── SECRETS — NEVER COMMIT ──────────────────────────────────────────────────
+# These contain real credentials. Even if you delete them later,
+# git history preserves them. Tools like GitLeaks will find them.
+secrets/
+*.key
+*.pem
+*.p12
+*.pfx
+vault_token*
+root_token*
+unseal_key*
+.env
+.env.*
+!.env.example
+
+# ─── TERRAFORM STATE — contains sensitive values ──────────────────────────────
+# State files contain resource IDs and sometimes secret values.
+# Use remote state (S3 + DynamoDB, or Terraform Cloud) and never commit locally.
+terraform.tfstate
+terraform.tfstate.backup
+terraform.tfstate.d/
+.terraform/
+.terraform.lock.hcl
+
+# ─── PYTHON ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# ─── LOGS — can contain sensitive data ───────────────────────────────────────
+*.log
+logs/
+nginx_logs/
+
+# ─── OS FILES ────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── IDE ─────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ─── DOCKER ──────────────────────────────────────────────────────────────────
+# Do NOT ignore docker-compose.yml — that's infrastructure code, commit it.
+# DO ignore override files with local dev credentials:
+docker-compose.override.yml
+
+.env
+
+# Explicit secret file patterns (belt and suspenders)
+**/secrets/
+vault_token*.txt
+vault_role_id*.txt
+vault_secret_id*.txt
+*password*.txt
+*_token.txt
+vault/data/
+*password*.txt
+*_id.txt
