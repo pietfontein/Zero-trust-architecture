@@ -146,5 +146,11 @@ jobs:
             git pull origin main
             docker compose up -d --build
             docker compose ps
+            for i in $(seq 1 30); do
+              if docker compose ps app_az1 app_az2 | grep -q "healthy"; then
+                break
+              fi
+              sleep 2
+            done
             cd scripts
             ./security-test.sh

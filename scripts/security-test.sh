@@ -16,7 +16,7 @@
 
 set -uo pipefail
 
-BASE_URL=${BASE_URL:-"http://localhost"}
+BASE_URL=${BASE_URL:-"http://localhost:8080"}
 PASS=0
 FAIL=0
 
@@ -26,8 +26,8 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-pass() { echo -e "${GREEN}✅ PASS${NC} — $1"; ((PASS++)); }
-fail() { echo -e "${RED}❌ FAIL${NC} — $1"; ((FAIL++)); }
+pass() { echo -e "${GREEN}✅ PASS${NC} — $1"; ((PASS++)); return 0; }
+fail() { echo -e "${RED}❌ FAIL${NC} — $1"; ((FAIL++)); return 1; }
 info() { echo -e "${YELLOW}[TEST]${NC} $1"; }
 
 echo "======================================================="
