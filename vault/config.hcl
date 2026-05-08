@@ -25,33 +25,24 @@
 #
 # ==============================================================================
 
-# Storage backend
-# WHY "file" for local dev?
-# File backend is simple and works with a single Vault instance.
-# For production: use "raft" (built-in clustering) or "consul" (external cluster)
+
 storage "file" {
   path = "/vault/data"
 }
 
-# Listener: how Vault accepts connections
+
 listener "tcp" {
   address = "0.0.0.0:8200"
-  
-  # WHY tls_disable in dev?
-  # TLS requires certificates. For local dev, we skip it.
-  # In production: ALWAYS enable TLS.
-  # tls_disable = "false"
-  # tls_cert_file = "/vault/tls/vault.crt"
-  # tls_key_file  = "/vault/tls/vault.key"
+
+
   tls_disable = "true"  # ← Change to false in production
 }
 
-# Disable mlock requirement for dev (non-root containers can't mlock)
-# In production: set up system limits or use the IPC_LOCK capability (already in docker-compose.yml)
+
 disable_mlock = true
 
-# API address for cluster coordination
+
 api_addr = "http://vault:8200"
 
-# UI: enable the web dashboard (disable in production if not needed)
+
 ui = true

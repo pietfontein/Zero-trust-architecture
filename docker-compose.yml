@@ -240,9 +240,9 @@ services:
     networks:
       - data_net  # Only app servers on data_net can reach Vault
     volumes:
-      - ../vault/data:/vault/data
-      - ../vault/config.hcl:/vault/config/config.hcl:ro
-      - ../vault/policies:/vault/policies:ro
+      - ./vault/data:/vault/data
+      - ./vault/config.hcl:/vault/config/config.hcl:ro
+      - ./vault/policies:/vault/policies:ro
     environment:
       - VAULT_ADDR=http://vault:8200
       - VAULT_ROLE_ID='/run/secrets/vault_role_id'
