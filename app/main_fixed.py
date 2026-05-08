@@ -248,6 +248,7 @@ def close_db(error):
 # HEALTH CHECK
 # ==============================================================================
 @app.route('/health')
+@limiter.exempt
 def health():
     checks = {}
     try:
