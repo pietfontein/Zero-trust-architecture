@@ -144,7 +144,7 @@ jobs:
           script: |
             cd /opt/zero-trust-architecture
             git pull origin main
-            cd terraform
-            terraform apply -auto-approve
-            cd ../scripts
+            docker compose up -d --build
+            docker compose ps
+            cd scripts
             ./security-test.sh
