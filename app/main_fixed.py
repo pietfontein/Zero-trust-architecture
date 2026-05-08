@@ -8,6 +8,7 @@ import os
 import logging
 import threading
 import time
+from urllib.parse import quote
 
 import bcrypt
 import hvac
@@ -61,13 +62,18 @@ def _read_secret_file(env_var: str, fallback_path: str) -> str:
     """
     path = os.environ.get(env_var, fallback_path)
     try:
-        with open(path) as f:
-            return f.read().strip()
-    except FileNotFoundError:
+        with open(path, encoding='utf-8') as f:
+            value = f.read().strip()
+    except FileNotFoundError as exc:
         raise RuntimeError(
             f"Required secret file not found: {path} (env: {env_var}). "
             "Run init-vault.sh first, then restart containers."
-        )
+        ) from exc
+
+    if not value:
+        raise RuntimeError(f"Required secret file is empty: {path} (env: {env_var})")
+
+    return value
 
 
 def _get_vault_client() -> hvac.Client:
@@ -106,18 +112,21 @@ def _get_vault_client() -> hvac.Client:
             )
         except hvac.exceptions.InvalidRequest as e:
             raise RuntimeError(
-                f"AppRole login failed — invalid role_id or secret_id: {e}. "
+                f"AppRole login failed - invalid role_id or secret_id: {e}. "
                 "Has init-vault.sh been run? Has the secret_id expired (24h TTL)?"
-            )
-        except hvac.exceptions.VaultDown:
+            ) from e
+        except hvac.exceptions.VaultDown as e:
             raise RuntimeError(
                 "Vault is sealed or unreachable. "
                 "Run: docker exec zt-vault vault operator unseal"
-            )
+            ) from e
 
         # Parse the token TTL from the login response
         # token_ttl is in seconds (e.g. 3600 for 1h)
-        token_ttl = login_response['auth']['lease_duration']
+        client.token = login_response['auth']['client_token']
+        token_ttl = int(login_response['auth']['lease_duration'])
+        if token_ttl <= 0:
+            raise RuntimeError("Vault AppRole login returned a non-expiring or invalid token TTL")
 
         # Renew at 80% of TTL elapsed (= 20% remaining)
         _token_expiry  = time.time() + (token_ttl * 0.8)
@@ -140,12 +149,15 @@ def _read_vault_secret(path: str) -> str:
         vault kv put secret/redis/password value="$REDIS_PASSWORD"
     """
     client = _get_vault_client()
-    secret = client.secrets.kv.v2.read_secret_version(
-        path=path,
-        mount_point='secret',
-        raise_on_deleted_version=True
-    )
-    return secret['data']['data']['value']
+    try:
+        secret = client.secrets.kv.v2.read_secret_version(
+            path=path,
+            mount_point='secret',
+            raise_on_deleted_version=True
+        )
+        return secret['data']['data']['value']
+    except KeyError as exc:
+        raise RuntimeError(f"Vault secret secret/{path} is missing required field 'value'") from exc
 
 
 def _get_vault_db_credentials() -> dict:
@@ -176,6 +188,8 @@ app.config['SECRET_KEY'] = (
     _secret_key if _secret_key is not None
     else _read_vault_secret('app/session_key')
 )
+if not app.config['SECRET_KEY']:
+    raise RuntimeError("SECRET_KEY is empty")
 
 # Redis password: same env-var-first pattern.
 # WHY no hardcoded fallback?
@@ -184,11 +198,17 @@ app.config['SECRET_KEY'] = (
 _redis_pw = os.environ.get('REDIS_PASSWORD')
 if not _redis_pw:
     _redis_pw = _read_vault_secret('redis/password')
+if not _redis_pw:
+    raise RuntimeError("Redis password is empty")
+
+redis_host = os.environ.get('REDIS_HOST', 'redis')
+redis_port = os.environ.get('REDIS_PORT', '6379')
+redis_password = quote(_redis_pw, safe='')
 
 limiter = Limiter(
     app=app,
     key_func=get_remote_address,
-    storage_uri=f"redis://:{_redis_pw}@{os.environ.get('REDIS_HOST', 'redis')}:6379",
+    storage_uri=f"redis://:{redis_password}@{redis_host}:{redis_port}/0",
     default_limits=["200 per day", "50 per hour"],
     strategy="fixed-window"
 )
@@ -202,11 +222,11 @@ def get_db():
         creds = _get_vault_db_credentials()
         g.db = psycopg2.connect(
             host=os.environ.get('POSTGRES_HOST', 'postgres_primary'),
-            port=5432,
-            database='appdb',
+            port=int(os.environ.get('POSTGRES_PORT', '5432')),
+            database=os.environ.get('POSTGRES_DB', 'appdb'),
             user=creds['username'],
             password=creds['password'],
-            sslmode='require',
+            sslmode=os.environ.get('POSTGRES_SSLMODE', 'require'),
             connect_timeout=5
         )
         g.db.autocommit = False

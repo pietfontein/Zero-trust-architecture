@@ -82,11 +82,12 @@ services:
       - public_net   # Faces the internet
       - private_net  # Routes to app servers
     volumes:
-      - ../nginx/nginx.conf:/etc/nginx/templates/nginx.conf.template:ro
-      - ../nginx/proxy-params.conf:/etc/nginx/conf.d/proxy-params.conf:ro
-      - ../nginx/security-headers.conf:/etc/nginx/conf.d/security-headers.conf:ro
+      - ./nginx/nginx.conf:/etc/nginx/templates/nginx.conf.template:ro
+      - ./nginx/proxy-params.conf:/etc/nginx/conf.d/proxy-params.conf:ro
+      - ./nginx/security-headers.conf:/etc/nginx/conf.d/security-headers.conf:ro
       - nginx_logs:/var/log/nginx
-      - ./nginx-run:/run
+    tmpfs:
+      - /run
     environment:
       - PARANOIA=2        # OWASP CRS paranoia level (1=low, 4=high). 2 is production-safe.
       - ANOMALY_INBOUND=5 # Score threshold — block if request score ≥ 5
@@ -106,7 +107,7 @@ services:
   # ============================================================================
   app_az1:
     build:
-      context: .
+      context: ./app
       dockerfile: Dockerfile
     container_name: zt-app-az1
     restart: unless-stopped
@@ -124,6 +125,7 @@ services:
       - VAULT_SECRET_ID_FILE=/run/secrets/vault_secret_id
       - REDIS_HOST=redis
       - POSTGRES_HOST=postgres_primary
+      - POSTGRES_SSLMODE=disable
     secrets:
       - vault_role_id
       - vault_secret_id
@@ -132,7 +134,6 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-    user: "1001:1001"  # app user (defined in Dockerfile)
     read_only: true    # Container filesystem is read-only
     tmpfs:
       - /tmp           # Apps need /tmp; mount it as tmpfs (memory, not disk)
@@ -142,7 +143,7 @@ services:
   # ============================================================================
   app_az2:
     build:
-      context: .
+      context: ./app
       dockerfile: Dockerfile
     container_name: zt-app-az2
     restart: unless-stopped
@@ -156,6 +157,7 @@ services:
       - VAULT_SECRET_ID_FILE=/run/secrets/vault_secret_id
       - REDIS_HOST=redis
       - POSTGRES_HOST=postgres_primary
+      - POSTGRES_SSLMODE=disable
     secrets:
       - vault_role_id
       - vault_secret_id
@@ -164,7 +166,6 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-    user: "1001:1001"
     read_only: true
     tmpfs:
       - /tmp
@@ -180,7 +181,7 @@ services:
       - data_net  # ONLY on data_net — completely unreachable from public tier
     volumes:
       - postgres_primary_data:/var/lib/postgresql/data
-      - ../scripts/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./scripts/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     environment:
       # WHY NOT HARDCODED PASSWORD?
       # The password is set by Vault during init. These env vars bootstrap the
@@ -216,14 +217,20 @@ services:
       - data_net  # Only reachable from private_net app servers
     volumes:
       - redis_data:/data
-      - ../scripts/redis.conf:/usr/local/etc/redis/redis.conf:ro
     # WHY THESE REDIS OPTIONS?
     # requirepass: authentication required (even on internal network)
     # maxmemory: prevent OOM from cache abuse
     # appendonly: persistence so sessions survive restarts
-    command: redis-server /usr/local/etc/redis/redis.conf
+    secrets:
+      - redis_password
+    command: >
+      sh -c 'redis-server
+      --requirepass "$$(cat /run/secrets/redis_password)"
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru'
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$$(cat /run/secrets/redis_password)\" ping | grep PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -235,8 +242,6 @@ services:
     image: hashicorp/vault:1.15
     container_name: zt-vault
     restart: unless-stopped
-    ports:
-     - "8200:8200"
     networks:
       - data_net  # Only app servers on data_net can reach Vault
     volumes:
@@ -245,8 +250,6 @@ services:
       - ./vault/policies:/vault/policies:ro
     environment:
       - VAULT_ADDR=http://vault:8200
-      - VAULT_ROLE_ID='/run/secrets/vault_role_id'
-      - VAULT_SECRET_ID='/run/secrets/vault_secret_id'
       - VAULT_API_ADDR=http://vault:8200
     cap_add:
       - IPC_LOCK  # Vault requires this to prevent secrets from being swapped to disk
@@ -314,8 +317,9 @@ secrets:
     file: ./secrets/vault_secret_id.txt
   postgres_password:
     file: ./secrets/postgres_password.txt
+  redis_password:
+    file: ./secrets/redis_password.txt
   minio_user:
     file: ./secrets/minio_user.txt
   minio_password:
     file: ./secrets/minio_password.txt
-

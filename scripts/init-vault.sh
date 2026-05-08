@@ -22,6 +22,7 @@ set -euo pipefail  # Exit on any error, undefined variable, or pipe failure
 
 VAULT_ADDR=${VAULT_ADDR:-"http://localhost:8200"}
 SECRETS_DIR="./secrets"
+POSTGRES_SSLMODE=${POSTGRES_SSLMODE:-"disable"}
 
 # Colors for output
 RED='\033[0;31m'
@@ -168,7 +169,7 @@ log_info "Configuring PostgreSQL dynamic secrets..."
 vault write database/config/postgresql \
     plugin_name=postgresql-database-plugin \
     allowed_roles="app-role" \
-    connection_url="postgresql://{{username}}:{{password}}@postgres_primary:5432/appdb?sslmode=require" \
+    connection_url="postgresql://{{username}}:{{password}}@postgres_primary:5432/appdb?sslmode=${POSTGRES_SSLMODE}" \
     username="postgres" \
     password="$POSTGRES_PASSWORD"
 
