@@ -122,10 +122,19 @@ jobs:
     name: "Deploy"
     runs-on: ubuntu-latest
     needs: [secret-detection, sast, container-scan, terraform-security]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.DEPLOY_ENABLED == 'true'
     environment: production
     steps:
       - uses: actions/checkout@v4
+      - name: Validate deployment secrets
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          test -n "$DEPLOY_HOST" || { echo "::error::Missing DEPLOY_HOST secret in the production environment"; exit 1; }
+          test -n "$DEPLOY_USER" || { echo "::error::Missing DEPLOY_USER secret in the production environment"; exit 1; }
+          test -n "$DEPLOY_SSH_KEY" || { echo "::error::Missing DEPLOY_SSH_KEY secret in the production environment"; exit 1; }
       - name: Deploy via SSH
         uses: appleboy/ssh-action@master
         with:
@@ -138,4 +147,4 @@ jobs:
             cd terraform
             terraform apply -auto-approve
             cd ../scripts
-            ./security-test.sh# Syncing latest SHA
+            ./security-test.sh
