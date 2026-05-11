@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="860" viewBox="0 0 1280 860" role="img" aria-labelledby="title desc">
+  <title id="title">Zero-Trust Self-Hosted Three-Tier Architecture</title>
+  <desc id="desc">A production-grade open-source architecture with public, private, and data tiers separated by internal Docker networks.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f7f9fc; }
+      .title { font: 700 34px Arial, Helvetica, sans-serif; fill: #102033; }
+      .subtitle { font: 400 17px Arial, Helvetica, sans-serif; fill: #3e5064; }
+      .tier-title { font: 700 19px Arial, Helvetica, sans-serif; letter-spacing: 1px; fill: #102033; }
+      .tier-note { font: 400 14px Arial, Helvetica, sans-serif; fill: #506176; }
+      .component { fill: #ffffff; stroke: #bcc9d8; stroke-width: 2; }
+      .component-strong { fill: #ffffff; stroke: #2f6fed; stroke-width: 2.5; }
+      .component-title { font: 700 17px Arial, Helvetica, sans-serif; fill: #132238; }
+      .component-sub { font: 400 13px Arial, Helvetica, sans-serif; fill: #53657a; }
+      .badge { fill: #e7f0ff; stroke: #8bb5ff; stroke-width: 1.5; }
+      .badge-text { font: 700 12px Arial, Helvetica, sans-serif; fill: #174ea6; }
+      .small { font: 400 12px Arial, Helvetica, sans-serif; fill: #5a6c80; }
+      .arrow { stroke: #2457c5; stroke-width: 3; fill: none; marker-end: url(#arrowhead); }
+      .arrow-muted { stroke: #71839a; stroke-width: 2.5; fill: none; marker-end: url(#arrowhead-muted); stroke-dasharray: 7 7; }
+      .boundary { fill: none; stroke: #7f90a6; stroke-width: 2; stroke-dasharray: 8 8; }
+      .public-band { fill: #eaf3ff; stroke: #2f6fed; stroke-width: 2.5; }
+      .private-band { fill: #eef8f1; stroke: #219653; stroke-width: 2.5; }
+      .data-band { fill: #fff4e8; stroke: #d9822b; stroke-width: 2.5; }
+      .warning { fill: #fff7d6; stroke: #c99a14; stroke-width: 1.5; }
+      .safe { fill: #eaf7ef; stroke: #43a263; stroke-width: 1.5; }
+    </style>
+    <marker id="arrowhead" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto">
+      <path d="M0,0 L11,4 L0,8 Z" fill="#2457c5"/>
+    </marker>
+    <marker id="arrowhead-muted" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto">
+      <path d="M0,0 L11,4 L0,8 Z" fill="#71839a"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-20%" width="120%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#123456" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <rect class="bg" width="1280" height="860"/>
+
+  <text class="title" x="64" y="58">Zero-Trust Web Architecture</text>
+  <text class="subtitle" x="64" y="88">No cloud. No vendor lock-in. Open-source controls. Production-grade isolation.</text>
+
+  <rect class="warning" x="905" y="36" rx="8" ry="8" width="310" height="58"/>
+  <text class="component-title" x="925" y="60">Self-hosted by design</text>
+  <text class="component-sub" x="925" y="80">Runs on Linux, VPS, or homelab</text>
+
+  <rect class="public-band" x="64" y="122" rx="16" ry="16" width="1152" height="190" filter="url(#shadow)"/>
+  <text class="tier-title" x="92" y="158">PUBLIC TIER</text>
+  <text class="tier-note" x="92" y="181">Only ports 80/443 are exposed. All requests enter through the edge proxy and WAF.</text>
+
+  <rect class="component-strong" x="110" y="210" rx="8" ry="8" width="210" height="68"/>
+  <text class="component-title" x="135" y="238">Internet</text>
+  <text class="component-sub" x="135" y="259">External clients</text>
+
+  <rect class="component-strong" x="455" y="196" rx="8" ry="8" width="280" height="96"/>
+  <text class="component-title" x="485" y="226">Nginx + ModSecurity</text>
+  <text class="component-sub" x="485" y="249">OWASP CRS WAF</text>
+  <text class="component-sub" x="485" y="270">TLS edge, reverse proxy</text>
+
+  <rect class="component" x="870" y="210" rx="8" ry="8" width="245" height="68"/>
+  <text class="component-title" x="900" y="238">Rate Limiting</text>
+  <text class="component-sub" x="900" y="259">Nginx + Flask-Limiter</text>
+
+  <line class="arrow" x1="320" y1="244" x2="445" y2="244"/>
+  <line class="arrow" x1="735" y1="244" x2="860" y2="244"/>
+
+  <rect class="private-band" x="64" y="360" rx="16" ry="16" width="1152" height="190" filter="url(#shadow)"/>
+  <text class="tier-title" x="92" y="396">PRIVATE TIER</text>
+  <text class="tier-note" x="92" y="419">Business logic is reachable only from the public tier. No direct host exposure.</text>
+
+  <rect class="component-strong" x="265" y="445" rx="8" ry="8" width="255" height="74"/>
+  <text class="component-title" x="292" y="474">App Server AZ1</text>
+  <text class="component-sub" x="292" y="496">Flask + Gunicorn</text>
+
+  <rect class="component-strong" x="760" y="445" rx="8" ry="8" width="255" height="74"/>
+  <text class="component-title" x="787" y="474">App Server AZ2</text>
+  <text class="component-sub" x="787" y="496">Flask + Gunicorn</text>
+
+  <line class="arrow-muted" x1="520" y1="482" x2="750" y2="482"/>
+  <line class="arrow" x1="995" y1="278" x2="995" y2="435"/>
+  <text class="small" x="1014" y="356">private network only</text>
+
+  <rect class="data-band" x="64" y="598" rx="16" ry="16" width="1152" height="210" filter="url(#shadow)"/>
+  <text class="tier-title" x="92" y="634">DATA TIER</text>
+  <text class="tier-note" x="92" y="657">Persistence, cache, object storage, and secrets are reachable only from application containers.</text>
+
+  <rect class="component-strong" x="110" y="694" rx="8" ry="8" width="220" height="74"/>
+  <text class="component-title" x="137" y="723">PostgreSQL</text>
+  <text class="component-sub" x="137" y="745">Primary database</text>
+
+  <rect class="component" x="385" y="694" rx="8" ry="8" width="190" height="74"/>
+  <text class="component-title" x="415" y="723">Redis</text>
+  <text class="component-sub" x="415" y="745">Cache + rate state</text>
+
+  <rect class="component" x="630" y="694" rx="8" ry="8" width="210" height="74"/>
+  <text class="component-title" x="660" y="723">MinIO</text>
+  <text class="component-sub" x="660" y="745">S3-compatible storage</text>
+
+  <rect class="component-strong" x="895" y="694" rx="8" ry="8" width="240" height="74"/>
+  <text class="component-title" x="925" y="723">HashiCorp Vault</text>
+  <text class="component-sub" x="925" y="745">AppRole + dynamic DB creds</text>
+
+  <line class="arrow" x1="392" y1="519" x2="220" y2="684"/>
+  <line class="arrow" x1="392" y1="519" x2="480" y2="684"/>
+  <line class="arrow" x1="888" y1="519" x2="735" y2="684"/>
+  <line class="arrow" x1="888" y1="519" x2="1015" y2="684"/>
+  <text class="small" x="594" y="578">data network only</text>
+
+  <rect class="boundary" x="92" y="682" rx="10" ry="10" width="1070" height="98"/>
+
+  <rect class="safe" x="98" y="820" rx="8" ry="8" width="335" height="28"/>
+  <text class="badge-text" x="116" y="839">Defense in depth: WAF + app validation</text>
+
+  <rect class="badge" x="472" y="820" rx="8" ry="8" width="300" height="28"/>
+  <text class="badge-text" x="490" y="839">Secrets stay out of source control</text>
+
+  <rect class="safe" x="812" y="820" rx="8" ry="8" width="355" height="28"/>
+  <text class="badge-text" x="830" y="839">Data tier has no public route</text>
+</svg>

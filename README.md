@@ -9,26 +9,7 @@
 
 ## 📐 Architecture Overview
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                        PUBLIC TIER                               │
-│   [Internet] → [Nginx + ModSecurity WAF] → Rate Limiter          │
-│                  (Port 80/443 only exposed)                      │
-└───────────────────────────┬──────────────────────────────────────┘
-                            │ Internal Network Only
-┌───────────────────────────▼──────────────────────────────────────┐
-│                        PRIVATE TIER                              │
-│   [App Server AZ1] ←→ [App Server AZ2]  (Flask/Node.js)         │
-│   (No direct internet access — only reachable from Public tier)  │
-└───────────────────────────┬──────────────────────────────────────┘
-                            │ Internal Network Only
-┌───────────────────────────▼──────────────────────────────────────┐
-│                        DATA TIER                                 │
-│   [PostgreSQL Primary] ←→ [PostgreSQL Replica]                   │
-│   [Redis Cache]   [MinIO (S3-compatible)]   [HashiCorp Vault]    │
-│   (Only reachable from Private tier — never from Public)         │
-└──────────────────────────────────────────────────────────────────┘
-```
+![Zero-Trust three-tier architecture](docs/architecture.svg)
 
 ### Why 3 Tiers?
 | Tier | Purpose | Exposed? |
